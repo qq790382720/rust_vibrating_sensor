@@ -1,0 +1,13 @@
+port = 22009
+sampling_length = 100
+
+[mqtt_server]
+url = "127.0.0.1:1883"
+public_topic = "topic/tests"
+client_id = "scada01"
+
+[data_upload]
+company_id = "cbd9ef26db814b58aa33fb0457eca8af"
+gateway_id = "gfwg"
+device_id = "weldingrobot_d15"
+
