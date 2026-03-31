@@ -18,6 +18,25 @@ mod constants;
 mod config;
 mod mqtt;
 
+/// NTP时间同步
+async fn ntp_sync(server: &str) -> Result<String, String> {
+    let output = Command::new("ntpdate")
+        .arg(server)
+        .output()
+        .await
+        .map_err(|e| format!("执行ntpdate失败: {}", e))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        tracing::info!("NTP同步成功: {}", stdout);
+        Ok(format!("NTP同步成功: {}", stdout))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::error!("NTP同步失败: {}", stderr);
+        Err(format!("NTP同步失败: {}", stderr))
+    }
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,12 +58,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let config = Arc::new(Settings::new(0));
-    let serve_dir = ServeDir::new("assetsa").not_found_service(ServeFile::new("assetsa/index.html"));
+    let serve_dir = ServeDir::new("ui").not_found_service(ServeFile::new("ui/index.html"));
     // 创建路由
     let app = Router::new()
         .route("/read-settings", get(read_settings))
         .route("/system_restart",get(system_restart))
         .route("/write-settings", post(write_settings))
+        .route("/ntp-sync", post(ntp_sync_handler))
         .nest_service("/assets", serve_dir.clone())
         .fallback_service(serve_dir)
         .with_state(Arc::clone(&config))
@@ -90,7 +110,7 @@ async fn system_restart(State(_server):State<Arc<Settings>>) -> Json<Response> {
     }
 
     // 无论成功失败，都返回 { "Ok": true }
-    Json(Response { ok: true })
+    Json(Response { ok: true, message: None })
 }
 // 写入设置文件
 async fn write_settings(State(_server): State<Arc<Settings>>, axum::extract::Json(payload): axum::extract::Json<Settings>) -> Json<Response> {
@@ -104,12 +124,36 @@ async fn write_settings(State(_server): State<Arc<Settings>>, axum::extract::Jso
 
     if let Err(e) = writeln!(file, "{}", toml_str) {
         eprintln!("写入设置文件时出错: {}", e);
-        return Json(Response { ok: false });
+        return Json(Response { ok: false, message: None });
     }
 
-    Json(Response { ok: true })
+    Json(Response { ok: true, message: None })
 }
+
+// NTP时间同步处理
+async fn ntp_sync_handler(State(_server): State<Arc<Settings>>) -> Json<Response> {
+    let settings = match Settings::from_file("Settings.toml") {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!("读取配置文件失败: {}", e);
+            return Json(Response { ok: false, message: Some(format!("读取配置失败: {}", e)) });
+        }
+    };
+
+    let ntp_server = &settings.ntp_server.server;
+    if ntp_server.is_empty() {
+        return Json(Response { ok: false, message: Some("NTP服务器未配置".to_string()) });
+    }
+
+    match ntp_sync(ntp_server).await {
+        Ok(msg) => Json(Response { ok: true, message: Some(msg) }),
+        Err(e) => Json(Response { ok: false, message: Some(e) }),
+    }
+}
+
 #[derive(Serialize)]
 struct Response {
     ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
 }

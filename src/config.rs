@@ -10,6 +10,12 @@ pub struct Settings {
     pub sampling_length: usize,
     pub mqtt_server: ServerConfig,
     pub data_upload: DataUploadConfig,
+    pub ntp_server: NtpConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct NtpConfig {
+    pub server: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -39,6 +45,9 @@ impl Settings {
                 company_id: "".to_string(),
                 gateway_id: "".to_string(),
                 device_id: "".to_string(),
+            },
+            ntp_server: NtpConfig {
+                server: "".to_string(),
             },
         }
     }
