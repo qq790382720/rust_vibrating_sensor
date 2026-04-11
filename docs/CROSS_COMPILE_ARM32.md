@@ -5,7 +5,7 @@
 - 宿主机: macOS (Apple Silicon)
 - 目标平台: Linux ARM32 (ARMv7)
 - C 库: musl (无 glibc 依赖)
-- 编译工具: Docker + messense/rust-musl-cross
+- 编译工具: Docker + `rust-musl-cross:armv7-musleabihf`
 
 ## 前置条件
 
@@ -33,46 +33,53 @@ open -a Docker
 docker run --rm hello-world
 ```
 
-## 添加 ARM32 目标平台
+### 4. 准备本地交叉编译镜像
 
 ```bash
-rustup target add armv7-unknown-linux-musleabihf
+docker image inspect rust-musl-cross:armv7-musleabihf || \
+docker image inspect messense/rust-musl-cross:armv7-musleabihf
 ```
 
-## 编译步骤
+如果你本地镜像标签是 `messense/rust-musl-cross:armv7-musleabihf`，项目脚本也会自动识别。
+如果是其他标签，可以在执行脚本时通过 `RUST_MUSL_CROSS_IMAGE` 覆盖。
 
-### 方法一: 使用 Docker + messense/rust-musl-cross (推荐)
+## 推荐方式: 使用项目脚本
 
-1. **拉取交叉编译镜像**
+项目已经提供了可复用入口：
 
 ```bash
-docker pull messense/rust-musl-cross:armv7-musleabihf
+./scripts/build-armv7-musl.sh
 ```
 
-2. **执行交叉编译**
+如果你本地镜像标签不同：
 
 ```bash
-docker run --rm \
-  -v "$(pwd)":/code \
-  -w /code \
-  messense/rust-musl-cross:armv7-musleabihf \
-  cargo build --release --target armv7-unknown-linux-musleabihf
+RUST_MUSL_CROSS_IMAGE=<your-local-tag> ./scripts/build-armv7-musl.sh
 ```
 
-3. **输出位置**
+脚本会自动完成：
+
+1. 检查 Docker daemon 是否已启动
+2. 检查本地是否存在支持的镜像标签
+3. 在容器内执行 `cargo build --release --target armv7-unknown-linux-musleabihf`
+4. 校验产物是否为 ARM 静态链接二进制
+
+输出位置:
 
 ```
 target/armv7-unknown-linux-musleabihf/release/rust_vibrating_sensor
 ```
 
-### 方法二: 使用 cross 工具
+## 手动 Docker 命令
+
+如果你想直接执行 Docker 命令，也可以使用下面的等价写法：
 
 ```bash
-# 安装 cross
-cargo install cross
-
-# 执行交叉编译
-cross build --release --target armv7-unknown-linux-musleabihf
+docker run --rm \
+  -v "$(pwd)":/home/rust/src \
+  -w /home/rust/src \
+  messense/rust-musl-cross:armv7-musleabihf \
+  cargo build --release --target armv7-unknown-linux-musleabihf
 ```
 
 ## 验证二进制
@@ -122,22 +129,18 @@ ssh root@<设备IP> /usr/local/bin/rust_vibrating_sensor --version
 
 ## 常见问题
 
-### Q: Docker 镜像拉取失败
-
-**问题**: `net/http: request canceled while waiting for connection`
+### Q: 本地镜像标签不同或不存在
 
 **解决**:
-```bash
-# 检查网络
-ping docker.io
 
-# 重试拉取
-docker pull messense/rust-musl-cross:armv7-musleabihf
+```bash
+docker images
+RUST_MUSL_CROSS_IMAGE=<your-local-tag> ./scripts/build-armv7-musl.sh
 ```
 
 ### Q: 编译报错 "toolchain may not be able to run on this system"
 
-**解决**: 使用 `cross` 工具或 Docker 方法，避免直接在 macOS 上交叉编译。
+**解决**: 使用项目脚本或 Docker 方法，避免直接在 macOS 上本机链接 musl 目标。
 
 ### Q: 二进制在目标系统上无法运行
 
@@ -145,14 +148,6 @@ docker pull messense/rust-musl-cross:armv7-musleabihf
 1. 确认目标系统是 ARM32 (非 ARM64)
 2. 确认使用 musl 静态链接
 3. 检查文件系统权限
-
-## 其他目标平台
-
-| 平台 | Target | Docker 镜像 |
-|------|--------|-------------|
-| ARM64 | aarch64-unknown-linux-musleabihf | messense/rust-musl-cross:aarch64-musleabihf |
-| ARMv7 | armv7-unknown-linux-musleabihf | messense/rust-musl-cross:armv7-musleabihf |
-| x86_64 | x86_64-unknown-linux-musl | messense/rust-musl-cross:x86_64-musl |
 
 ## 编译输出信息
 

@@ -5,6 +5,8 @@ sampling_length = 100
 url = "127.0.0.1:1883"
 public_topic = "topic/tests"
 client_id = "scada01"
+username = "ceshi"
+password = "123"
 
 [data_upload]
 company_id = "cbd9ef26db814b58aa33fb0457eca8af"

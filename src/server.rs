@@ -36,15 +36,17 @@ impl WaveServer {
         }
     }
 
-    /// 运行服务器以开始监听客户端连接。
-    ///
-    /// # 返回值
-    ///
-    /// * `Result<(), Box<dyn std::error::Error>>` - 如果运行过程中发生错误，则返回错误。
-    pub async fn run(&self, mqtt_client: Arc<Mutex<Arc<MqttPublisher>>>, settings: Arc<Settings>) -> Result<(), Box<dyn std::error::Error>> {
-        let addr = format!("0.0.0.0:{}", self.port);
-        let listener = TcpListener::bind(&addr).await?;
-        println!("WaveServer listening on {}", addr);
+    pub fn listen_addr(&self) -> String {
+        format!("0.0.0.0:{}", self.port)
+    }
+
+    pub async fn run_with_listener(
+        &self,
+        listener: TcpListener,
+        mqtt_client: Arc<Mutex<Arc<MqttPublisher>>>,
+        settings: Arc<Settings>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        println!("WaveServer listening on {}", listener.local_addr()?);
 
         loop {
             // 接受新的客户端连接。

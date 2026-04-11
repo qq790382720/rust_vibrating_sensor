@@ -66,6 +66,24 @@
                 placeholder="scada01"
               />
             </div>
+            <div class="form-group">
+              <label for="mqttUsername">用户名</label>
+              <input
+                id="mqttUsername"
+                v-model="config.mqtt_server.username"
+                type="text"
+                placeholder="username"
+              />
+            </div>
+            <div class="form-group">
+              <label for="mqttPassword">密码</label>
+              <input
+                id="mqttPassword"
+                v-model="config.mqtt_server.password"
+                type="password"
+                placeholder="password"
+              />
+            </div>
           </div>
         </section>
 
@@ -136,7 +154,9 @@ const config = ref({
   mqtt_server: {
     url: '',
     public_topic: '',
-    client_id: ''
+    client_id: '',
+    username: '',
+    password: ''
   },
   data_upload: {
     company_id: '',

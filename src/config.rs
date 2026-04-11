@@ -30,6 +30,8 @@ pub struct ServerConfig {
     pub url: String,
     pub public_topic: String,
     pub client_id: String,
+    pub username: String,
+    pub password: String,
 }
 impl Settings {
     pub fn new(port: u16) -> Self {
@@ -40,6 +42,8 @@ impl Settings {
                 url: "".to_string(),
                 public_topic: "".to_string(),
                 client_id: "".to_string(),
+                username: "".to_string(),
+                password: "".to_string(),
             },
             data_upload: DataUploadConfig {
                 company_id: "".to_string(),

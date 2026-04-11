@@ -46,6 +46,27 @@ cargo build --release
 ./target/release/rust_vibrating_sensor
 ```
 
+## Cross Compile for ARMv7 musl
+
+Use the local Docker image `rust-musl-cross:armv7-musleabihf`.
+If your local tag is `messense/rust-musl-cross:armv7-musleabihf`, the script will pick it up automatically.
+
+```bash
+./scripts/build-armv7-musl.sh
+```
+
+Output:
+
+```bash
+./target/armv7-unknown-linux-musleabihf/release/rust_vibrating_sensor
+```
+
+If your local image uses another tag, override it temporarily:
+
+```bash
+RUST_MUSL_CROSS_IMAGE=<your-local-tag> ./scripts/build-armv7-musl.sh
+```
+
 ## HTTP API
 
 | Endpoint | Method | Description |

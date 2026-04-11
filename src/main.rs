@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
+use std::io;
 use tokio::sync::Mutex;
 
 use axum::routing::post;
@@ -17,6 +18,15 @@ mod packet;
 mod constants;
 mod config;
 mod mqtt;
+
+const HTTP_BIND_ADDR: &str = "0.0.0.0:8082";
+
+fn bind_error(service: &str, addr: &str, error: io::Error) -> io::Error {
+    io::Error::new(
+        error.kind(),
+        format!("{service} failed to bind {addr}: {error}"),
+    )
+}
 
 /// NTP时间同步
 async fn ntp_sync(server: &str) -> Result<String, String> {
@@ -40,21 +50,33 @@ async fn ntp_sync(server: &str) -> Result<String, String> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
-    let settings = Settings::from_file("Settings.toml")?;
-    let client = MqttPublisher::new(
-        &*settings.mqtt_server.url, &*settings.mqtt_server.client_id,
-        &*settings.mqtt_server.public_topic).await.expect("TODO: panic message");
-    let mqtt_client = Arc::new(Mutex::new(client));
-
     // 全局日志初始化
     env_logger::init();
 
+    let settings = Arc::new(Settings::from_file("Settings.toml")?);
+    let client = MqttPublisher::new(
+        &*settings.mqtt_server.url, &*settings.mqtt_server.client_id,
+        &*settings.mqtt_server.public_topic,
+        &*settings.mqtt_server.username, &*settings.mqtt_server.password
+    ).await.map_err(|err| io::Error::other(format!("初始化 MQTT 客户端失败: {err}")))?;
+    let mqtt_client = Arc::new(Mutex::new(client));
+
     let server = Arc::new(WaveServer::new(settings.port));
     let server_clone = server.clone();
+    let sensor_bind_addr = server.listen_addr();
+    let sensor_listener = tokio::net::TcpListener::bind(&sensor_bind_addr)
+        .await
+        .map_err(|err| bind_error("Sensor TCP server", &sensor_bind_addr, err))?;
+    let sensor_settings = settings.clone();
+    let sensor_mqtt_client = mqtt_client.clone();
 
     tokio::spawn(async move {
-        server_clone.run(mqtt_client, Arc::new(settings)).await.unwrap();
+        if let Err(err) = server_clone
+            .run_with_listener(sensor_listener, sensor_mqtt_client, sensor_settings)
+            .await
+        {
+            tracing::error!("Sensor TCP server stopped: {}", err);
+        }
     });
 
     let config = Arc::new(Settings::new(0));
@@ -65,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/system_restart",get(system_restart))
         .route("/write-settings", post(write_settings))
         .route("/ntp-sync", post(ntp_sync_handler))
-        .nest_service("/assets", serve_dir.clone())
+        .nest_service("/ui", serve_dir.clone())
         .fallback_service(serve_dir)
         .with_state(Arc::clone(&config))
         .layer(CorsLayer::new()  // 添加这行来启用 CORS
@@ -73,7 +95,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .allow_methods(Any)  // 允许任何 HTTP 方法
         .allow_headers(Any)); // 允许任何头部
     // 启动服务器
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8082").await?;
+    let listener = tokio::net::TcpListener::bind(HTTP_BIND_ADDR)
+        .await
+        .map_err(|err| bind_error("HTTP server", HTTP_BIND_ADDR, err))?;
+    tracing::info!("HTTP server listening on {}", HTTP_BIND_ADDR);
     axum::serve(listener, app).await?;
 
     loop {
